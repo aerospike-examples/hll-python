@@ -1,5 +1,5 @@
 # hll-python
-HyperLogLog sample for blog post.
+HyperLogLog sample for [blog post](https://aerospike.com/blog/taking-advantage-of-probabilistic-data-structures/).
 
 ---
 **NOTE**
