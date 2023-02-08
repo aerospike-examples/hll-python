@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import argparse
 import random
@@ -18,74 +18,69 @@ HLL_MH_BITS = 0
 MONTHS = 12
 
 
-def init(host, port):
-    config = {
-        "hosts": [
-            (host, port),
-        ],
-        "policies": {"timeout": 1000},  # milliseconds
-    }
+def init(host: str, port: int) -> aerospike.client:
+    config = {"hosts": [(host, port)], "policies": {"timeout": 1000}}  # milliseconds
 
     client = aerospike.client(config).connect()
     return client
 
 
-def getkey(name, time):
-    return ("test", "hll", "%s:%d" % (name, time))
+def getkey(name: str, time: int) -> tuple:
+    return ("test", "hll", f"{name}:{time}")
 
 
 # Ingest records with id in the range [start, end).
-def ingest_month(client, start, end, month):
-    # We don't need to initialise HLL bins; performing a HLL add to an empty bin will initialise it.
-    print "Ingest ids %d-%d month %d" % (start, end, month)
+def ingest_month(client: aerospike.client, start: int, end: int, month: int) -> None:
+    # We don't need to initialise HLL bins; performing a HLL add to an empty bin
+    # will initialise it.
+    print(f"Ingest ids {start}-{end} month {month}")
 
     for i in range(start, end):
         profile = generator.get_profile(i, month)
-        # print("Profile %d: %s" % (i, profile))
+        # print("Profile {i}: {profile}")
         for tag in profile:
             ops = [hll_operations.hll_add(HLL_BIN, [str(i)], HLL_INDEX_BITS)]
 
             _, _, result = client.operate(getkey(tag, month), ops)
 
 
-def ingest(client):
+def ingest(client: aerospike.client) -> None:
     for i in range(MONTHS):
         ingest_month(client, 1, 20000, i)
 
 
-def count(client, tag, month):
+def count(client: aerospike.client, tag: str, month: int) -> None:
     ops = [hll_operations.hll_get_count(HLL_BIN)]
     _, _, result = client.operate(getkey(tag, month), ops)
-    print "tag:%s month:%d count:%d" % (tag, month, result[HLL_BIN])
-    # print result
+    print(f"tag:{tag} month:{month} count:{result[HLL_BIN]}")
 
 
-def get_union_count(client, tag, t0, months):
+def get_union_count(client: aerospike.client, tag: str, t0: int, months: int) -> None:
     times = range(t0 + 1, months)
-    records = [
+    hlls = [
         record[2][HLL_BIN]
         for record in client.get_many([getkey(tag, time) for time in times])
     ]
 
-    ops = [hll_operations.hll_get_union_count(HLL_BIN, records)]
+    ops = [hll_operations.hll_get_union_count(HLL_BIN, hlls)]
 
     _, _, result = client.operate(getkey(tag, t0), ops)
-    print "tag:%s months:%d-%d count:%d" % (tag, t0, t0 + months - 1, result[HLL_BIN])
+    print(f"tag:{tag} months:{t0}-{t0 + months - 1} count:{result[HLL_BIN]}")
 
 
-def get_intersect_count(client, tags, month):
-    records = [
+def get_intersect_count(client: aerospike.client, tags: list, month: int) -> None:
+    hlls = [
         record[2][HLL_BIN]
         for record in client.get_many([getkey(tag, month) for tag in tags[1:]])
     ]
 
-    ops = [hll_operations.hll_get_intersect_count(HLL_BIN, records)]
+    ops = [hll_operations.hll_get_intersect_count(HLL_BIN, hlls)]
 
     _, _, result = client.operate(getkey(tags[0], month), ops)
-    print "tags:%s month:%d count:%d" % (tags, month, result[HLL_BIN])
+    print(f"tags:{tags} month:{month} count:{result[HLL_BIN]}")
 
 
-def main():
+def main() -> None:
     client = init(args.host, 3000)
     ingest(client)
 
@@ -103,4 +98,5 @@ def main():
     get_intersect_count(client, ["vancouver", "washington"], 0)
 
 
-main()
+if __name__ == "__main__":
+    main()
